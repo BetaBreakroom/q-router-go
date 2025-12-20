@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/guillaume/q-router-go/internal/fibo"
 )
 
 type TaskDefinition struct {
@@ -23,8 +24,12 @@ func PostTask(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
+	res := fibo.Fibo(*json.N)
+	if res == -1 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "n must be non-negative"})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{
-		"n": *json.N,
+		"fibo(n)": res,
 	})
 }
