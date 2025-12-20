@@ -24,9 +24,21 @@ func PostTask(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	res := fibo.Fibo(*json.N)
-	if res == -1 {
+	if json.N == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "n is required"})
+		return
+	}
+	if *json.N < 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "n must be non-negative"})
+		return
+	}
+	if *json.N > 40 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "n must be less than or equal to 40"})
+		return
+	}
+	res, err := fibo.Fibo(*json.N)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
