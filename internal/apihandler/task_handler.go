@@ -24,12 +24,12 @@ func PostTask(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	res := fibo.Fibo(*json.N)
-	if res == -1 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "n must be non-negative"})
+	res, err := fibo.Fibo(*json.N)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"fibo(n)": res,
+		"fibo": res,
 	})
 }
