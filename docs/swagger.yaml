@@ -1,0 +1,40 @@
+basePath: /api/v1
+definitions:
+  apihandler.TaskDefinition:
+    properties:
+      "n":
+        type: integer
+    required:
+    - "n"
+    type: object
+info:
+  contact: {}
+paths:
+  /ping:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+      tags:
+      - HealthCheck
+  /task:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Task to enqueue
+        in: body
+        name: task
+        required: true
+        schema:
+          $ref: '#/definitions/apihandler.TaskDefinition'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+      tags:
+      - Task management
+swagger: "2.0"
