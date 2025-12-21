@@ -4,8 +4,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	docs "github.com/guillaume/q-router-go/docs"
-	apihandler "github.com/guillaume/q-router-go/internal/apihandler"
+	docs "q-router-go/docs"
+	apihandler "q-router-go/internal/apihandler"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
