@@ -33,3 +33,6 @@ go.work.sum
 
 # Build output
 dist/
+
+# VSCode files
+.vscode/
