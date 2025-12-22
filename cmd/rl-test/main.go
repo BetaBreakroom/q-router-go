@@ -5,11 +5,18 @@ import (
 	learner "q-router-go/internal/learner"
 	worker "q-router-go/internal/worker"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
-func taskHandler(payload string, env *worker.Environment, wg *sync.WaitGroup, selectedWorkers chan<- int) {
-	defer wg.Done()
+func taskHandler(payload string, env *worker.Environment, wg *sync.WaitGroup, count *atomic.Int64, selectedWorkers chan<- int) {
+	defer func() {
+		wg.Done()
+		count.Add(-1)
+		if err := recover(); err != nil {
+			fmt.Println("!!!!!work failed:", err)
+		}
+	}()
 
 	start := time.Now()
 
@@ -17,62 +24,86 @@ func taskHandler(payload string, env *worker.Environment, wg *sync.WaitGroup, se
 	//fmt.Printf("State: %s\n", state)
 
 	// Choose worker based on RL agent
-	workerIndex := env.Agent.ChooseWorker(state)
-	fmt.Printf("Selected worker: %d\n", workerIndex)
+	availableWorkers := env.GetAvailableWorkers()
+	if len(availableWorkers) == 0 {
+		fmt.Println("No available workers!")
+		selectedWorkers <- -1
+	} else {
+		workerIndex := env.Agent.ChooseWorker(state, availableWorkers)
+		if workerIndex == -1 {
+			fmt.Println("RL Agent could not select a worker!")
+			selectedWorkers <- -1
+		} else {
+			fmt.Printf("Selected worker: %d\n", workerIndex)
 
-	// Enqueue task
-	resultChannel := make(chan string)
-	env.EnqueueTask(workerIndex, worker.Task{Payload: payload, Result: resultChannel})
+			// Enqueue task
+			resultChannel := make(chan string)
+			isSubmitted := env.EnqueueTask(workerIndex, worker.Task{Payload: payload, Result: resultChannel})
 
-	// Wait for result
-	<-resultChannel
-	//fmt.Printf("Task result: %s\n", result)
-	close(resultChannel)
+			var reward float64
 
-	duration := time.Now().Sub(start)
-	fmt.Printf("Task processed in %d ms.\n", duration.Milliseconds())
+			if isSubmitted {
+				// Wait for result
+				<-resultChannel
+				//fmt.Printf("Task result: %s\n", result)
+				close(resultChannel)
 
-	// Learn RLAgent based on the observed reward
-	nextState := env.GetState(payload)
-	reward := 1.0 / float64(duration.Seconds())
-	env.Agent.Learn(state, nextState, workerIndex, reward)
+				duration := time.Now().Sub(start)
+				fmt.Printf("Task processed in %d ms.\n", duration.Milliseconds())
 
-	selectedWorkers <- workerIndex
+				reward = 1.0 / float64(duration.Seconds())
+				selectedWorkers <- workerIndex
+			} else {
+				fmt.Printf("Worker %d queue is full!\n", workerIndex)
+				reward = -50.0
+				selectedWorkers <- -1
+			}
+
+			// Learn RLAgent based on the observed reward
+			nextState := env.GetState(payload)
+			env.Agent.Learn(state, nextState, workerIndex, reward)
+		}
+	}
 }
 
 func main() {
 	workerCount := 4
-	agent := learner.NewRLAgent(0.1, 0.5, 0.1, workerCount)
+	agent := learner.NewRLAgent(0.5, 0.5, 0.1, workerCount)
 	env := worker.NewEnvironment(workerCount, agent)
 
 	env.SleepPolicies[0] = worker.CreateSleepPolicy(500, 500, 0, 0.0)
-	env.SleepPolicies[1] = worker.CreateSleepPolicy(50, 50, 0, 0.0)
-	env.SleepPolicies[2] = worker.CreateSleepPolicy(200, 200, 0, 0.0)
-	env.SleepPolicies[3] = worker.CreateSleepPolicy(50, 50, 200, 0.5)
+	env.SleepPolicies[1] = worker.CreateSleepPolicy(40, 60, 0, 0.0)
+	env.SleepPolicies[2] = worker.CreateSleepPolicy(0, 100, 0, 0.0)
+	env.SleepPolicies[3] = worker.CreateSleepPolicy(50, 50, 800, 0.1)
 
 	fmt.Println("Created agent, worker count:", agent.WorkerCount)
 
 	env.StartWorkers()
 
 	var requestWg sync.WaitGroup
-	selectedWorkers := make(chan int, 1000)
+	var tasksSubmitted atomic.Int64
+	selectedWorkers := make(chan int, 10000)
 
 	start := time.Now()
 
-	const numTasks = 100
+	const numTasks = 1000
 	for _ = range numTasks {
 		requestWg.Add(1)
+		tasksSubmitted.Add(1)
 		payload := "TASK"
-		go taskHandler(payload, env, &requestWg, selectedWorkers)
-		time.Sleep(100 * time.Millisecond)
+		go taskHandler(payload, env, &requestWg, &tasksSubmitted, selectedWorkers)
+		time.Sleep(20 * time.Millisecond)
 	}
 
+	fmt.Println("All tasks submitted, waiting for completion...")
+	fmt.Println("Current tasks in progress:", tasksSubmitted.Load())
 	requestWg.Wait()
 	close(selectedWorkers)
 
+	fmt.Println("All tasks completed.")
 	env.StopWorkers()
 
-	countWorkers := make([]int, workerCount)
+	countWorkers := make(map[int]int)
 	for workerId := range selectedWorkers {
 		countWorkers[workerId]++
 	}

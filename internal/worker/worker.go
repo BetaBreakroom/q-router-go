@@ -17,6 +17,9 @@ type Environment struct {
 	SleepPolicies []func()
 }
 
+const MediumTrafficQueueLengthThreshold = 1
+const HighTrafficQueueLengthFraction = 0.5
+
 type Task struct {
 	Payload string
 	Result  chan string
@@ -47,8 +50,13 @@ func (env *Environment) StopWorkers() {
 	env.Sync.Wait()
 }
 
-func (env *Environment) EnqueueTask(workerIndex int, task Task) {
-	env.Queues[workerIndex] <- task
+func (env *Environment) EnqueueTask(workerIndex int, task Task) bool {
+	select {
+	case env.Queues[workerIndex] <- task:
+		return true // Channel not full
+	default:
+		return false // Channel full
+	}
 }
 
 func (env *Environment) GetQueueLengths() []int {
@@ -67,14 +75,14 @@ func (env *Environment) GetState(payload string) string {
 		lenQ := len(q) // Current items in channel
 		capQ := cap(q) // Max capacity of channel
 
-		status := "BUSY"
+		status := "LOW"
 
-		if lenQ == 0 {
-			status = "IDLE"
-		} else if lenQ >= capQ {
+		if lenQ >= capQ {
 			status = "FULL"
-		} else if float64(lenQ) > float64(capQ)*0.7 {
-			status = "HEAVY" // >70% capacity
+		} else if float64(lenQ) > float64(capQ)*HighTrafficQueueLengthFraction {
+			status = "HIGH" // >50% capacity
+		} else if lenQ > MediumTrafficQueueLengthThreshold {
+			status = "MED" // >1 item, medium traffic
 		}
 
 		sb.WriteString(fmt.Sprintf("W%d:%s_", i, status))
@@ -83,6 +91,18 @@ func (env *Environment) GetState(payload string) string {
 	sb.WriteString(fmt.Sprintf("P:%s", payload))
 
 	return sb.String()
+}
+
+func (env *Environment) GetAvailableWorkers() map[int]bool {
+	availableWorkers := make(map[int]bool)
+	for i := 0; i < env.WorkerCount; i++ {
+		if len(env.Queues[i]) < cap(env.Queues[i]) {
+			availableWorkers[i] = true
+		} else {
+			fmt.Printf("Worker %d is full.\n", i)
+		}
+	}
+	return availableWorkers
 }
 
 func CreateSleepPolicy(sleepMinMs int, sleepMaxMs int, lockMs int, lockProba float64) func() {

@@ -3,6 +3,7 @@ package learner
 import (
 	"math"
 	"math/rand/v2"
+	"strings"
 	"sync"
 )
 
@@ -29,7 +30,7 @@ func NewRLAgent(alpha float64, gamma float64, epsilon float64, workerCount int) 
 	}
 }
 
-const InitialOptimism = 100.0
+const InitialOptimism = 25.0
 
 // Ensure the state exists in the Q-table, initializing with default Q-values if not
 // Returns true if state already existed, false if it was created
@@ -47,16 +48,29 @@ func (agent *RLAgent) EnsureStateExists(state string) bool {
 
 // Chose the worker with the highest Q-value for the given state, or explore randomly based on epsilon
 // If the state is not in the table, initialize it with default Q-values
-func (agent *RLAgent) ChooseWorker(state string) int {
-	agent.Lock.Lock()
-	defer agent.Lock.Unlock()
+func (agent *RLAgent) ChooseWorker(state string, availableWorkers map[int]bool) int {
+	agent.Lock.RLock()
+	_, stateExists := agent.Table[state]
+	agent.Lock.RUnlock()
 
-	stateExists := agent.EnsureStateExists(state)
+	if !stateExists {
+		// Initialize state in Q-table
+		agent.Lock.Lock()
+		agent.EnsureStateExists(state)
+		agent.Lock.Unlock()
+	}
+
+	agent.Lock.RLock()
+	defer agent.Lock.RUnlock()
 
 	// Epsilon-greedy action selection
 	// Use NextWorker for round-robin exploration
 	if rand.Float64() < agent.Epsilon || !stateExists {
-		defer func() { agent.NextWorker = (agent.NextWorker + 1) % agent.WorkerCount }()
+		updateNextWorkerFunc := func() { agent.NextWorker = (agent.NextWorker + 1) % agent.WorkerCount }
+		for !availableWorkers[agent.NextWorker] {
+			updateNextWorkerFunc()
+		}
+		defer updateNextWorkerFunc()
 		return agent.NextWorker
 	}
 
@@ -66,17 +80,25 @@ func (agent *RLAgent) ChooseWorker(state string) int {
 
 	const tolerance = 1e-9
 	for i, qValue := range agent.Table[state] {
-		if qValue > maxVal+tolerance {
-			maxVal = qValue
-			bestIndex = []int{i}
-		} else if math.Abs(qValue-maxVal) <= tolerance {
-			bestIndex = append(bestIndex, i)
+		// Only consider available workers
+		if availableWorkers[i] {
+			if qValue > maxVal+tolerance {
+				maxVal = qValue
+				bestIndex = []int{i}
+			} else if math.Abs(qValue-maxVal) <= tolerance {
+				bestIndex = append(bestIndex, i)
+			}
 		}
 	}
 
-	// If multiple best workers, choose randomly among them
-	choice := bestIndex[rand.IntN(len(bestIndex))]
-	return choice
+	if len(bestIndex) == 0 {
+		// No available workers, should not happen due to prior checks
+		return -1
+	} else {
+		// If multiple best workers, choose randomly among them
+		choice := bestIndex[rand.IntN(len(bestIndex))]
+		return choice
+	}
 }
 
 func (agent *RLAgent) Learn(state string, nextState string, workerIndex int, reward float64) {
@@ -87,10 +109,17 @@ func (agent *RLAgent) Learn(state string, nextState string, workerIndex int, rew
 	agent.EnsureStateExists(nextState)
 
 	currentQ := agent.Table[state][workerIndex]
-	maxNextQ := agent.Table[nextState][0]
-	for i := 1; i < len(agent.Table[nextState]); i++ {
-		if agent.Table[nextState][i] > maxNextQ {
-			maxNextQ = agent.Table[nextState][i]
+
+	var maxNextQ float64
+	if strings.Count(nextState, "FULL") == agent.WorkerCount {
+		// All workers are full, add pessimism
+		maxNextQ = -100.0
+	} else {
+		maxNextQ = agent.Table[nextState][0]
+		for i := 1; i < len(agent.Table[nextState]); i++ {
+			if agent.Table[nextState][i] > maxNextQ {
+				maxNextQ = agent.Table[nextState][i]
+			}
 		}
 	}
 
