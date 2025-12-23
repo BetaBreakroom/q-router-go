@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Q-Pher Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body style="font-family: sans-serif; padding: 20px;">
+    <h1>🧠 Q-Pher Brain Activity</h1>
+    
+    <div style="width: 600px;">
+        <canvas id="latencyChart"></canvas>
+    </div>
+    
+    <div>
+        <h3>Worker Load</h3>
+        <p>Worker 0: <span id="w0">0</span></p>
+        <p>Worker 1: <span id="w1">0</span></p>
+        <p>Worker 2: <span id="w2">0</span></p>
+        <p>Worker 3: <span id="w3">0</span></p>
+    </div>
+
+    <div>
+        <h3>Tasks</h3>
+        <p>Total tasks: <span id="totalTasks">0</span></p>
+        <p>Dismissed tasks: <span id="dismissedTasks">0</span></p>
+    </div>
+
+    <script>
+        // 1. Setup Chart
+        const ctx = document.getElementById('latencyChart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [], // Time (Requests)
+                datasets: [{
+                    label: 'Task Throughput (tasks/sec)',
+                    data: [],
+                    borderColor: 'rgb(75, 192, 192)',
+                    tension: 0.1
+                }]
+            }
+        });
+
+        // 2. Connect WebSocket
+        const socket = new WebSocket("ws://localhost:8080/api/v1/ws");
+
+        socket.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+
+            // Update Text
+            document.getElementById("w0").innerText = data.tasksPerWorker[0];
+            document.getElementById("w1").innerText = data.tasksPerWorker[1];
+            document.getElementById("w2").innerText = data.tasksPerWorker[2];
+            document.getElementById("w3").innerText = data.tasksPerWorker[3];
+
+            document.getElementById("totalTasks").innerText = data.totalProcessedTasks;
+            document.getElementById("dismissedTasks").innerText = data.dismissedTasks;
+
+            // Update Chart
+            // Keep only last 20 data points to avoid crowding
+            if (chart.data.labels.length > 20) {
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+            }
+            
+            chart.data.labels.push(data.totalProcessedTasks);
+            chart.data.datasets[0].data.push(data.taskThroughput);
+            chart.update();
+        };
+    </script>
+</body>
+</html>

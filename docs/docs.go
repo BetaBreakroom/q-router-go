@@ -30,6 +30,21 @@ const docTemplate = `{
                 }
             }
         },
+        "/statistics": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Task management"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
         "/task": {
             "post": {
                 "consumes": [
@@ -58,17 +73,32 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/ws": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Task management"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
         }
     },
     "definitions": {
         "apihandler.TaskDefinition": {
             "type": "object",
             "required": [
-                "n"
+                "type"
             ],
             "properties": {
-                "n": {
-                    "type": "integer"
+                "type": {
+                    "type": "string"
                 }
             }
         }
