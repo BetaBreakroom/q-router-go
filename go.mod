@@ -1,4 +1,4 @@
-module github.com/guillaume/q-router-go
+module q-router-go
 
 go 1.25.0
 
