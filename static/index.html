@@ -13,10 +13,7 @@
     
     <div>
         <h3>Worker Load</h3>
-        <p>Worker 0: <span id="w0">0</span></p>
-        <p>Worker 1: <span id="w1">0</span></p>
-        <p>Worker 2: <span id="w2">0</span></p>
-        <p>Worker 3: <span id="w3">0</span></p>
+        <div id="workersContainer"></div>
     </div>
 
     <div>
@@ -41,18 +38,37 @@
             }
         });
 
-        // 2. Connect WebSocket
+        // 2. Dynamic worker management
+        function updateWorkers(tasksPerWorker) {
+            const container = document.getElementById('workersContainer');
+            
+            // Create or update worker elements
+            tasksPerWorker.forEach((taskCount, index) => {
+                let workerElement = document.getElementById(`w${index}`);
+                
+                if (!workerElement) {
+                    // Create new worker element if it doesn't exist
+                    const p = document.createElement('p');
+                    p.innerHTML = `Worker ${index}: <span id="w${index}">0</span>`;
+                    container.appendChild(p);
+                    workerElement = document.getElementById(`w${index}`);
+                }
+                
+                // Update the task count
+                workerElement.innerText = taskCount;
+            });
+        }
+
+        // 3. Connect WebSocket
         const socket = new WebSocket("ws://localhost:8080/api/v1/ws");
 
         socket.onmessage = function(event) {
             const data = JSON.parse(event.data);
 
-            // Update Text
-            document.getElementById("w0").innerText = data.tasksPerWorker[0];
-            document.getElementById("w1").innerText = data.tasksPerWorker[1];
-            document.getElementById("w2").innerText = data.tasksPerWorker[2];
-            document.getElementById("w3").innerText = data.tasksPerWorker[3];
+            // Update Workers dynamically
+            updateWorkers(data.tasksPerWorker);
 
+            // Update Tasks
             document.getElementById("totalTasks").innerText = data.totalProcessedTasks;
             document.getElementById("dismissedTasks").innerText = data.dismissedTasks;
 
