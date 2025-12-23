@@ -2,10 +2,10 @@ basePath: /api/v1
 definitions:
   apihandler.TaskDefinition:
     properties:
-      "n":
-        type: integer
+      type:
+        type: string
     required:
-    - "n"
+    - type
     type: object
 info:
   contact: {}
@@ -19,6 +19,15 @@ paths:
           description: OK
       tags:
       - HealthCheck
+  /statistics:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+      tags:
+      - Task management
   /task:
     post:
       consumes:
@@ -30,6 +39,15 @@ paths:
         required: true
         schema:
           $ref: '#/definitions/apihandler.TaskDefinition'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+      tags:
+      - Task management
+  /ws:
+    get:
       produces:
       - application/json
       responses:
