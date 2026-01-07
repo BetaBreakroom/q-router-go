@@ -36,3 +36,6 @@ dist/
 
 # VSCode files
 .vscode/
+
+# Debug files
+__debug_bin*

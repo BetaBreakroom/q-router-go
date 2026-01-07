@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-	learner "q-router-go/internal/learner"
-	worker "q-router-go/internal/worker"
+	"log"
+	"q-router-go/internal/learner"
+	"q-router-go/internal/worker"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -26,15 +27,15 @@ func taskHandler(payload string, env *worker.Environment, wg *sync.WaitGroup, co
 	// Choose worker based on RL agent
 	availableWorkers := env.GetAvailableWorkers()
 	if len(availableWorkers) == 0 {
-		fmt.Println("No available workers!")
+		log.Println("No available workers!")
 		selectedWorkers <- -1
 	} else {
 		workerIndex := env.Agent.ChooseWorker(state, availableWorkers)
 		if workerIndex == -1 {
-			fmt.Println("RL Agent could not select a worker!")
+			log.Println("RL Agent could not select a worker!")
 			selectedWorkers <- -1
 		} else {
-			fmt.Printf("Selected worker: %d\n", workerIndex)
+			log.Printf("Selected worker: %d\n", workerIndex)
 
 			// Enqueue task
 			resultChannel := make(chan string)
@@ -49,12 +50,12 @@ func taskHandler(payload string, env *worker.Environment, wg *sync.WaitGroup, co
 				close(resultChannel)
 
 				duration := time.Now().Sub(start)
-				fmt.Printf("Task processed in %d ms.\n", duration.Milliseconds())
+				log.Printf("Task processed in %d ms.\n", duration.Milliseconds())
 
 				reward = 1.0 / float64(duration.Seconds())
 				selectedWorkers <- workerIndex
 			} else {
-				fmt.Printf("Worker %d queue is full!\n", workerIndex)
+				log.Printf("Worker %d queue is full!\n", workerIndex)
 				reward = -50.0
 				selectedWorkers <- -1
 			}
@@ -76,13 +77,13 @@ func main() {
 	env.SleepPolicies[2] = worker.CreateSleepPolicy(0, 100, 0, 0.0)
 	env.SleepPolicies[3] = worker.CreateSleepPolicy(50, 50, 800, 0.1)
 
-	fmt.Println("Created agent, worker count:", agent.WorkerCount)
+	log.Println("Created agent, worker count:", agent.WorkerCount)
 
 	env.StartWorkers()
 
 	var requestWg sync.WaitGroup
 	var tasksSubmitted atomic.Int64
-	selectedWorkers := make(chan int, 10000)
+	selectedWorkers := make(chan int, 1000)
 
 	start := time.Now()
 
@@ -95,12 +96,12 @@ func main() {
 		time.Sleep(20 * time.Millisecond)
 	}
 
-	fmt.Println("All tasks submitted, waiting for completion...")
-	fmt.Println("Current tasks in progress:", tasksSubmitted.Load())
+	log.Println("All tasks submitted, waiting for completion...")
+	log.Println("Current tasks in progress:", tasksSubmitted.Load())
 	requestWg.Wait()
 	close(selectedWorkers)
 
-	fmt.Println("All tasks completed.")
+	log.Println("All tasks completed.")
 	env.StopWorkers()
 
 	countWorkers := make(map[int]int)
@@ -109,14 +110,14 @@ func main() {
 	}
 
 	for i, count := range countWorkers {
-		fmt.Printf("Worker %d was selected %f%%.\n", i, (float64(count)/float64(numTasks))*100)
+		log.Printf("Worker %d was selected %f%%.\n", i, (float64(count)/float64(numTasks))*100)
 	}
 
 	elapsed := time.Now().Sub(start)
-	fmt.Printf("Executed %d tasks in %d ms.\n", numTasks, elapsed.Milliseconds())
+	log.Printf("Executed %d tasks in %d ms.\n", numTasks, elapsed.Milliseconds())
 
-	fmt.Println("Final Q-Table:")
+	log.Println("Final Q-Table:")
 	for state, qValues := range agent.Table {
-		fmt.Printf("State: %s, Q-Values: %v\n", state, qValues)
+		log.Printf("State: %s, Q-Values: %v\n", state, qValues)
 	}
 }
